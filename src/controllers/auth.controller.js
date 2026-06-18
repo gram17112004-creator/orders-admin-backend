@@ -1,16 +1,54 @@
 import User from "../models/User.model.js";
+import Customer from "../models/Customer.model.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
+function normalizeEmail(email) {
+  return String(email || "").toLowerCase().trim();
+}
+
 function getRoleByEmail(email) {
   const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
-  const userEmail = email?.toLowerCase().trim();
+  const userEmail = normalizeEmail(email);
 
   if (adminEmail && userEmail === adminEmail) {
     return "admin";
   }
 
   return "customer";
+}
+
+async function saveCustomerFromUser(user) {
+  const role = String(user.role || "customer").toLowerCase();
+
+  // المدير ما بدنا يظهر بصفحة الزبائن
+  if (role === "admin") return;
+
+  const email = normalizeEmail(user.email);
+
+  if (!email) return;
+
+  const customerName =
+    user.fullName ||
+    user.name ||
+    email.split("@")[0] ||
+    "Customer";
+
+  await Customer.findOneAndUpdate(
+    { email },
+    {
+      name: customerName,
+      email,
+      phone: user.phone || "Not provided",
+      address: user.address || "",
+      notes: "Created automatically from customer account",
+    },
+    {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true,
+    }
+  );
 }
 
 export const register = async (req, res, next) => {
@@ -29,7 +67,7 @@ export const register = async (req, res, next) => {
       });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(email);
 
     const existingUser = await User.findOne({
       email: normalizedEmail,
@@ -45,10 +83,13 @@ export const register = async (req, res, next) => {
 
     const user = await User.create({
       name: name || fullName,
+      fullName: fullName || name,
       email: normalizedEmail,
       password,
       role,
     });
+
+    await saveCustomerFromUser(user);
 
     const token = jwt.sign(
       {
@@ -65,7 +106,7 @@ export const register = async (req, res, next) => {
       user: {
         id: user._id,
         name: user.name,
-        fullName: user.name,
+        fullName: user.fullName || user.name,
         email: user.email,
         role: user.role,
       },
@@ -86,7 +127,7 @@ export const login = async (req, res, next) => {
       });
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
+    const normalizedEmail = normalizeEmail(email);
 
     const user = await User.findOne({
       email: normalizedEmail,
@@ -113,6 +154,8 @@ export const login = async (req, res, next) => {
       await user.save();
     }
 
+    await saveCustomerFromUser(user);
+
     const token = jwt.sign(
       {
         id: user._id,
@@ -128,7 +171,7 @@ export const login = async (req, res, next) => {
       user: {
         id: user._id,
         name: user.name,
-        fullName: user.name,
+        fullName: user.fullName || user.name,
         email: user.email,
         role: user.role,
       },

@@ -10,8 +10,15 @@ const customerSchema = new mongoose.Schema(
 
     phone: {
       type: String,
-      required: true,
       trim: true,
+      default: "Not provided",
+    },
+
+    email: {
+      type: String,
+      lowercase: true,
+      trim: true,
+      default: "",
     },
 
     address: {

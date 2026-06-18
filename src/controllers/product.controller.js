@@ -2,9 +2,9 @@ import Product from "../models/Product.model.js";
 
 export const createProduct = async (req, res, next) => {
   try {
-    const { name, category, price, stock, description } = req.body;
+    const { name, category, price, stock, imageUrl, description } = req.body;
 
-    if (!name) {
+    if (!name || name.trim() === "") {
       return res.status(400).json({ message: "Product name is required" });
     }
 
@@ -13,11 +13,12 @@ export const createProduct = async (req, res, next) => {
     }
 
     const product = await Product.create({
-      name,
-      category: category || "عام",
+      name: name.trim(),
+      category: category?.trim() || "عام",
       price: Number(price),
       stock: Number(stock || 0),
-      description: description || "",
+      imageUrl: imageUrl?.trim() || "",
+      description: description?.trim() || "",
     });
 
     res.status(201).json(product);
@@ -36,6 +37,7 @@ export const getProducts = async (req, res, next) => {
       filter.$or = [
         { name: { $regex: search, $options: "i" } },
         { category: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
       ];
     }
 
@@ -49,16 +51,29 @@ export const getProducts = async (req, res, next) => {
 
 export const updateProduct = async (req, res, next) => {
   try {
-    const { name, category, price, stock, description } = req.body;
+    const { name, category, price, stock, imageUrl, description } = req.body;
+
+    if (!name || name.trim() === "") {
+      return res.status(400).json({ message: "Product name is required" });
+    }
+
+    if (price === undefined || Number(price) < 0) {
+      return res.status(400).json({ message: "Valid price is required" });
+    }
+
+    if (stock === undefined || Number(stock) < 0) {
+      return res.status(400).json({ message: "Valid stock is required" });
+    }
 
     const product = await Product.findByIdAndUpdate(
       req.params.id,
       {
-        name,
-        category,
+        name: name.trim(),
+        category: category?.trim() || "عام",
         price: Number(price),
         stock: Number(stock),
-        description,
+        imageUrl: imageUrl?.trim() || "",
+        description: description?.trim() || "",
       },
       {
         new: true,

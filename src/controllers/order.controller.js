@@ -13,6 +13,70 @@ function isValidObjectId(id) {
   return id && mongoose.Types.ObjectId.isValid(id);
 }
 
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function readValueFromNotes(notes, label) {
+  const lines = String(notes || "").split("\n");
+
+  const line = lines.find((item) =>
+    item.toLowerCase().startsWith(label.toLowerCase() + ":")
+  );
+
+  if (!line) return "";
+
+  return line.substring(line.indexOf(":") + 1).trim();
+}
+
+async function saveCustomerFromOrder(orderData) {
+  const customerName =
+    orderData.customerName ||
+    readValueFromNotes(orderData.notes, "Customer name") ||
+    "Customer";
+
+  const customerEmail = normalizeEmail(
+    orderData.customerEmail ||
+      orderData.email ||
+      readValueFromNotes(orderData.notes, "Customer email")
+  );
+
+  const customerPhone =
+    orderData.customerPhone ||
+    readValueFromNotes(orderData.notes, "Phone") ||
+    "Not provided";
+
+  const customerAddress =
+    orderData.customerAddress ||
+    readValueFromNotes(orderData.notes, "Address") ||
+    "غير معروف";
+
+  const customerNotes =
+    readValueFromNotes(orderData.notes, "Customer notes") ||
+    orderData.customerNotes ||
+    "";
+
+  const filter = customerEmail
+    ? { email: customerEmail }
+    : { name: customerName, phone: customerPhone };
+
+  await Customer.findOneAndUpdate(
+    filter,
+    {
+      name: customerName,
+      email: customerEmail,
+      phone: customerPhone,
+      address: customerAddress,
+      notes: customerNotes || "Created automatically from customer order",
+    },
+    {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true,
+    }
+  );
+}
+
 async function buildOrderData(body, oldOrder = null) {
   const quantity = Number(body.quantity ?? oldOrder?.quantity ?? 1);
   const status = body.status || oldOrder?.status || "pending";
@@ -110,6 +174,8 @@ export const createOrder = async (req, res, next) => {
     }
 
     const order = await Order.create(data);
+
+    await saveCustomerFromOrder(data);
 
     const populatedOrder = await Order.findById(order._id)
       .populate("productId")
@@ -224,6 +290,8 @@ export const updateOrder = async (req, res, next) => {
     })
       .populate("productId")
       .populate("customerId");
+
+    await saveCustomerFromOrder(data);
 
     res.status(200).json(updatedOrder);
   } catch (err) {
