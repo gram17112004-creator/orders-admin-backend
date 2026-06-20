@@ -2,6 +2,9 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
@@ -14,12 +17,32 @@ import rateLimitMiddleware from "./middlewares/rateLimit.middleware.js";
 
 const app = express();
 
+// Logger file setup
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const logsDir = path.join(__dirname, "../logs");
+
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir);
+}
+
+const accessLogStream = fs.createWriteStream(
+  path.join(logsDir, "access.log"),
+  { flags: "a" }
+);
+
 // Middlewares
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Logger
 app.use(morgan("dev"));
+app.use(morgan("combined", { stream: accessLogStream }));
+
+// Rate Limiting
 app.use(rateLimitMiddleware);
 
 // Health Check
