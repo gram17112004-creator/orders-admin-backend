@@ -29,7 +29,15 @@ export const createProduct = async (req, res, next) => {
 
 export const getProducts = async (req, res, next) => {
   try {
-    const { search } = req.query;
+    const {
+      search,
+      category,
+      minPrice,
+      maxPrice,
+      page = 1,
+      limit = 10,
+      sort = "-createdAt",
+    } = req.query;
 
     const filter = {};
 
@@ -41,9 +49,41 @@ export const getProducts = async (req, res, next) => {
       ];
     }
 
-    const products = await Product.find(filter).sort({ createdAt: -1 });
+    if (category) {
+      filter.category = category;
+    }
 
-    res.status(200).json(products);
+    if (minPrice || maxPrice) {
+      filter.price = {};
+
+      if (minPrice) {
+        filter.price.$gte = Number(minPrice);
+      }
+
+      if (maxPrice) {
+        filter.price.$lte = Number(maxPrice);
+      }
+    }
+
+    const pageNumber = Math.max(Number(page), 1);
+    const limitNumber = Math.max(Number(limit), 1);
+    const skip = (pageNumber - 1) * limitNumber;
+
+    const products = await Product.find(filter)
+      .select("name category price stock imageUrl description createdAt")
+      .sort(sort)
+      .skip(skip)
+      .limit(limitNumber);
+
+    const total = await Product.countDocuments(filter);
+
+    res.status(200).json({
+      total,
+      page: pageNumber,
+      limit: limitNumber,
+      results: products.length,
+      products,
+    });
   } catch (err) {
     next(err);
   }
